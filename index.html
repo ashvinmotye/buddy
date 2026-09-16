@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#191919">
+  <meta name="description" content="Buddy tracks income, PAYE withheld and your Mauritius income tax forecast for the current financial year.">
+  <title>Buddy · Tax Forecast</title>
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="app.css">
+  <script src="tax.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><img class="brand-mark" src="icons/icon.svg" width="42" height="42" alt=""><div class="brand-copy"><div class="brand-title"><span class="brand-name">BUDDY</span><span class="brand-separator" aria-hidden="true">·</span><span class="brand-descriptor">TAX FORECAST</span></div><div id="year-label" class="subtle"></div></div></div>
+      <div class="header-actions">
+        <button id="theme-button" class="icon-button" type="button" aria-label="Switch theme" title="Switch theme"></button>
+        <button id="settings-button" class="icon-button" type="button" aria-label="Sources and backup" title="Sources and backup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6m6 4v6"/></svg></button>
+      </div>
+    </header>
+
+    <main>
+      <section class="overview" aria-label="Annual overview">
+        <div class="overview-heading"><h1>Year at a glance</h1><span id="projection-badge" class="badge">Forecast</span></div>
+        <div class="metrics">
+          <div class="metric primary"><div class="metric-label">Projected income</div><div id="income-total" class="metric-value">Rs 0</div><div id="income-detail" class="metric-note"></div></div>
+          <div class="metric"><div class="metric-label">PAYE already paid</div><div id="paye-paid" class="metric-value">Rs 0</div><div class="metric-note">Confirmed months only</div></div>
+          <div class="metric"><div class="metric-label">Projected total tax</div><div id="tax-total" class="metric-value">Rs 0</div><div class="metric-note">Based on annual income</div></div>
+          <div class="metric"><div id="balance-label" class="metric-label">Projected year-end balance</div><div id="tax-balance" class="metric-value">Rs 0</div><div id="balance-detail" class="metric-note"></div></div>
+        </div>
+      </section>
+
+      <section class="months" aria-label="Financial year by month">
+        <div class="section-heading"><div><h2>Monthly view</h2><p>July to June · amounts in MUR</p></div><button id="add-source-main" class="button solid" type="button">Add income source</button></div>
+        <div class="table-scroll"><table class="month-table"><thead><tr><th scope="col">Month</th><th scope="col">Income</th><th scope="col">PAYE paid / forecast</th><th scope="col">Monthly tax forecast</th><th scope="col"><span class="sr-only">Edit</span></th></tr></thead><tbody id="month-rows"></tbody></table></div>
+        <div id="month-cards" class="month-cards"></div>
+      </section>
+
+      <p id="calculation-note" class="calculation-note">Monthly tax forecast spreads the projected annual tax across months in proportion to their income. It is a planning figure, not PAYE charged on freelance income.</p>
+      <div class="source-footer">Rules for income year July 2026–June 2027 · <a href="https://www.mra.mu/download/EDFForm.pdf" target="_blank" rel="noopener noreferrer">MRA tax bands</a></div>
+    </main>
+  </div>
+
+  <dialog id="month-dialog" class="dialog month-dialog"><div class="dialog-inner"><div class="dialog-header"><div><div id="dialog-status" class="eyebrow"></div><h2 id="month-title"></h2></div><button class="icon-button close" type="button" data-close="month-dialog" aria-label="Close">×</button></div><div id="month-editor"></div><div class="dialog-footer"><button class="button outline" type="button" data-close="month-dialog">Close</button><button id="save-month" class="button solid" type="button">Save month</button></div></div></dialog>
+
+  <dialog id="settings-dialog" class="dialog settings-dialog"><div class="dialog-inner"><div class="dialog-header"><div><div class="eyebrow">SETTINGS</div><h2>Settings</h2></div><button class="icon-button close" type="button" data-close="settings-dialog" aria-label="Close">×</button></div><section class="settings-section"><h3>Currency conversion</h3><label class="setting-label" for="general-rate">Default EUR → MUR rate</label><div class="setting-row"><input id="general-rate" type="number" min="0.0001" step="0.0001" inputmode="decimal" placeholder="e.g. 51.25"><button id="save-general-rate" class="button outline" type="button">Save rate</button></div><p class="setting-help">Used for EUR sources and months unless you set a different rate there. Clear and save to remove this default.</p></section><section class="settings-section"><h3>Income sources</h3><div id="source-list"></div><button id="add-source" class="button outline full" type="button">Add source</button></section><section class="settings-section backup-section"><h3>Backup</h3><p>Data is saved on this device. Export a backup before clearing browser data or changing devices.</p><div class="backup-actions"><button id="export-button" class="button outline" type="button">Export JSON</button><button id="import-button" class="button outline" type="button">Import JSON</button><input id="import-file" type="file" accept="application/json,.json" hidden></div></section></div></dialog>
+
+  <dialog id="source-dialog" class="dialog source-dialog"><form id="source-form" class="dialog-inner"><div class="dialog-header"><div><div class="eyebrow">INCOME</div><h2 id="source-title">Add source</h2></div><button class="icon-button close" type="button" data-close="source-dialog" aria-label="Close">×</button></div><div class="form-grid"><label>Source name<input id="source-name" required maxlength="64" placeholder="e.g. Main salary"></label><label>Type<select id="source-type"><option value="salary">Salary</option><option value="freelance">Freelance</option></select></label><label>Currency<select id="source-currency"><option value="MUR">MUR</option><option value="EUR">EUR</option></select></label><label id="basic-salary-wrap" hidden>Basic salary · <span id="basic-salary-currency">MUR</span><input id="source-basic-salary" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Monthly amount before PAYE"><span class="field-help">Exclude any exempt transport allowance. You can edit each month.</span></label><label id="default-rate-wrap" hidden>EUR → MUR rate<input id="source-rate" type="number" min="0.0001" step="0.0001" inputmode="decimal" placeholder="Set a conversion rate"><span class="field-help">Defaults to the general rate. Clear to follow changes to it.</span></label></div><p id="source-error" class="error" role="alert" hidden></p><div class="dialog-footer"><button class="button outline" type="button" data-close="source-dialog">Cancel</button><button class="button solid" type="submit">Save source</button></div></form></dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
