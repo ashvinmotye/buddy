@@ -8,6 +8,8 @@ A plain HTML, CSS and JavaScript PWA for Mauritius income tax planning (income y
 
 From this folder, run `python3 -m http.server 8000` and visit `http://localhost:8000`. Install the PWA from your browser if supported. Hosting it requires HTTPS for offline service worker use, except on localhost.
 
+The project ZIP contains `.gitignore` at its root with the single line `.DS_Store`.
+
 ## Data
 
 Income sources, monthly entries and EUR conversion rates are stored locally in this browser. Existing PAYE Planner entries load automatically when Buddy is installed at the same address, and earlier JSON backups can still be imported. A salary source can have a basic monthly salary; each month uses it unless you enter a different amount. Confirming a month records its salary amount so changing the source's basic salary later will not rewrite confirmed months. Set a general EUR → MUR rate in Settings. A source can use a custom rate, and an individual month can override that source's rate; clearing the rate field in either editor restores its default. Rates that have not been explicitly overridden follow changes to the general setting.
