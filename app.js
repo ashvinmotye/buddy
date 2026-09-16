@@ -234,7 +234,7 @@
   function numericField(labelText, value, currency, field, sourceId, step = '0.01') {
     const label = create('label', '', labelText);
     const input = create('input'); input.type = 'number'; input.min = '0'; input.step = step; input.inputMode = 'decimal';
-    input.placeholder = currency === 'EUR' ? '€ 0.00' : 'Rs 0.00';
+    input.placeholder = field === 'rate' ? 'Use default rate' : 'Not entered';
     if (value != null) input.value = String(value);
     input.dataset.field = field; input.dataset.sourceId = sourceId;
     input.addEventListener('input', () => { input.dataset.edited = 'true'; updateMonthSummary(); });
