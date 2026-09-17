@@ -1,0 +1,3 @@
+[functions.buddy-reminders]
+verify_jwt = false # /dispatch has its own secret; device routes use a 256-bit local token.
+entrypoint = './functions/buddy-reminders/index.mjs'

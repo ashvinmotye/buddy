@@ -8,6 +8,7 @@
 .brand-mark{display:block;border:0;border-radius:11px}
 .setting-label{display:block;font-size:13px;color:var(--muted);margin-bottom:7px}.setting-row{display:flex;gap:9px;align-items:center}.setting-row input{flex:1}.setting-row .button{white-space:nowrap}.settings-section .setting-help{font-size:12px;margin:9px 0 0}.field-help{font-size:12px;line-height:1.35;color:var(--muted)}
 .entry-grid{align-items:start}.entry-grid label{align-content:start}
+.reminder-setting{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:14px;font-weight:600}.reminder-setting input{width:20px;height:20px;min-width:20px;padding:0;margin:0;border:0;accent-color:var(--accent);cursor:pointer}.reminder-setting input:disabled{cursor:not-allowed}
 @media(max-width:400px){.setting-row{align-items:stretch;flex-direction:column}.setting-row .button{width:100%}}
 .topbar{gap:12px}.brand{min-width:0}.brand-mark,.header-actions{flex:none}.brand-copy{min-width:0}.brand-title{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:7px;line-height:1.25}.brand-separator{color:var(--muted);font-size:15px}.brand-descriptor{font-size:12px;font-weight:550;letter-spacing:.09em;white-space:nowrap}
 @media(max-width:400px){.brand{gap:9px}.brand-title{column-gap:4px}.brand-name{letter-spacing:.1em}.brand-separator{font-size:12px}.brand-descriptor{font-size:10px;letter-spacing:.025em}#year-label{font-size:11px}}

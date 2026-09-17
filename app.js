@@ -49,6 +49,20 @@
   function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
   function entryKey(month, sourceId) { return `${month}:${sourceId}`; }
   function recorded(month, sourceId) { return entries()[entryKey(month, sourceId)] || null; }
+  function reminderSnapshot() {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {timeZone: 'Indian/Mauritius', year: 'numeric', month: '2-digit'}).formatToParts(new Date()).map(part => [part.type, part.value]));
+    const year = Number(parts.year), calendarMonth = Number(parts.month);
+    const financialYear = calendarMonth >= 7 ? year : year - 1;
+    const monthEntries = state.years[`${financialYear}-${financialYear + 1}`]?.entries || {};
+    const monthIndex = (calendarMonth + 5) % 12;
+    return {
+      monthKey: `${parts.year}-${parts.month}`,
+      hasActual: state.sources.some(source => {
+        const entry = monthEntries[entryKey(monthIndex, source.id)];
+        return entry?.kind === 'actual' && entry.amount != null;
+      })
+    };
+  }
   function pastValue(month, sourceId, field) {
     for (let prior = month - 1; prior >= 0; prior--) {
       const value = recorded(prior, sourceId)?.[field];
@@ -186,7 +200,7 @@
         if (!confirm(`Delete ${source.name} and all its monthly entries?`)) return;
         state.sources = state.sources.filter(s => s.id !== source.id);
         for (const data of Object.values(state.years)) for (const key of Object.keys(data.entries || {})) if (key.endsWith(`:${source.id}`)) delete data.entries[key];
-        save(); render(); showToast('Source deleted');
+        save(); render(); window.BuddyReminders?.sync(); showToast('Source deleted');
       });
       actions.append(edit, pause, remove); row.append(info, actions); list.append(row);
     }
@@ -316,7 +330,7 @@
     }
     for (const [key, value] of changes) entries()[key] = value;
     try {save();} catch {showToast('Storage is full; export a backup'); return;}
-    $('month-dialog').close(); editingMonth = null; render(); showToast('Month saved');
+    $('month-dialog').close(); editingMonth = null; render(); window.BuddyReminders?.sync(); showToast('Month saved');
   }
   function exportBackup() {
     const payload = {...state, exportedAt: new Date().toISOString()};
@@ -336,7 +350,7 @@
     if (!confirm('Replace all data on this device with this backup?')) return;
     state = normalizeState(imported);
     try {save();} catch {showToast('Storage is full; import not saved'); return;}
-    render(); $('settings-dialog').close(); showToast('Backup imported');
+    render(); window.BuddyReminders?.sync(); $('settings-dialog').close(); showToast('Backup imported');
   }
   function registerWebMCP() {
     if (!document.modelContext?.registerTool) return;
@@ -374,7 +388,7 @@
           entries()[key] = {...existing, amount:input.amount, kind,
             ...(input.eur_to_mur_rate != null ? {rate:input.eur_to_mur_rate} : {}),
             ...(input.paye_mur != null ? {paye:input.paye_mur} : {})};
-          save(); render(); const t = totals();
+          save(); render(); window.BuddyReminders?.sync(); const t = totals();
           return {month:MONTHS[input.month_index], source:source.name, status:kind, income_mur:t.monthData[input.month_index].income, annual_tax_mur:t.tax};
         }
       })).catch(() => {});
@@ -394,5 +408,5 @@
   $('import-file').addEventListener('change', importBackup);
   document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => $(button.dataset.close).close()));
   if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
-  render(); registerWebMCP();
+  render(); registerWebMCP(); window.BuddyReminders?.init(reminderSnapshot);
 })();

@@ -18,4 +18,20 @@ In a future month, entering **0** income carries zero into following forecast mo
 
 Use **Settings → Export JSON** to make a backup and **Import JSON** to restore it. Imported data replaces the current data.
 
+## Optional monthly reminders
+
+After the one-time Supabase setup below, Settings has a single **Enable notifications** switch. On the **3rd of each calendar month**, the first push is sent at 10:00 Mauritius time even if the month is already recorded. At 13:00, 16:00, 19:00 and 22:00, a push is sent only when that calendar month still has no recorded entry. A confirmed salary default or an explicitly entered 0 counts; a forecast, a carried-forward value and an empty field do not. Buddy chooses from the ten approved messages at random, avoiding the previous message on that device. The notification opens Buddy.
+
+Buddy continues to store all income, PAYE and currency amounts only on the device. Supabase receives a browser push subscription and a yes/no recorded status for the current calendar month. The notification setting and anonymous device token stay on the current browser and are not in the JSON backup. Each installation has independent reminders. A recorded month saved offline will sync when the app next opens online; a later push may arrive before it syncs. The switch works only on HTTPS. On iPhone, add Buddy to the Home Screen and open the installed app before enabling notifications.
+
+### One-time Supabase setup (developer)
+
+1. Create a Supabase project. Run `supabase/migrations/20260917_buddy_reminders.sql` in its SQL editor (or apply it as a migration). The tables have RLS enabled and no public policies.
+2. Run `node scripts/generate-reminder-keys.mjs` locally. In the Supabase Dashboard, set the generated `BUDDY_VAPID_KEYS` JSON and `BUDDY_CRON_SECRET` as **Edge Function secrets**. Also set `BUDDY_ORIGIN` to Buddy's exact HTTPS origin, for example `https://buddy.example.com`. Keep these values out of the website, ZIP and Git; `.gitignore` intentionally contains only `.DS_Store`.
+3. From the project folder, link the CLI to the project and deploy: `supabase link --project-ref YOUR_PROJECT_REF`, then `supabase functions deploy buddy-reminders`. `supabase/config.toml` selects the function entrypoint and disables the gateway JWT check; the function separately validates device tokens and the cron secret. The server code requires no credentials in the browser.
+4. Set the project function URL in `reminder-config.js`, for example `https://YOUR_PROJECT_REF.supabase.co/functions/v1/buddy-reminders`. This is a public URL, not a secret. Upload the updated website over HTTPS.
+5. In the Supabase SQL editor, fill the two placeholders in `supabase/cron.sql` and run it once. Use the **same cron secret** from step 2. Supabase Cron calls the function at 06:00, 09:00, 12:00, 15:00 and 18:00 GMT on the 3rd, corresponding to 10:00, 13:00, 16:00, 19:00 and 22:00 in Mauritius. Check the Cron history and Edge Function logs after the first scheduled run.
+
+The PWA works offline without reminders if Supabase has not yet been configured. The notification switch then explains that setup is pending. Do not rotate the VAPID key without asking devices to subscribe again; changing it invalidates existing push subscriptions.
+
 The tax forecast applies the 2026–27 bands linked in the app to the total entered and projected MUR income. Enter basic salary before PAYE, plus any taxable extra pay in months where applicable; omit exempt transport allowance. Monthly tax forecast is an allocation of annual tax for planning; salary PAYE paid or forecast is recorded separately. Review the rules before using it for a later financial year.
