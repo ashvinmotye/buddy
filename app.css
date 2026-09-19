@@ -12,3 +12,24 @@
 @media(max-width:400px){.setting-row{align-items:stretch;flex-direction:column}.setting-row .button{width:100%}}
 .topbar{gap:12px}.brand{min-width:0}.brand-mark,.header-actions{flex:none}.brand-copy{min-width:0}.brand-title{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:7px;line-height:1.25}.brand-separator{color:var(--muted);font-size:15px}.brand-descriptor{font-size:12px;font-weight:550;letter-spacing:.09em;white-space:nowrap}
 @media(max-width:400px){.brand{gap:9px}.brand-title{column-gap:4px}.brand-name{letter-spacing:.1em}.brand-separator{font-size:12px}.brand-descriptor{font-size:10px;letter-spacing:.025em}#year-label{font-size:11px}}
+
+/* Savings tracking adds a fifth dashboard metric and monthly table column. */
+.metrics{grid-template-columns:repeat(5,minmax(0,1fr))}
+.metric-value{font-size:clamp(22px,2.25vw,32px)}
+.month-table th{font-size:11px;letter-spacing:.07em;padding-left:13px;padding-right:13px}
+.month-table th:first-child{width:18%}
+.month-table th:nth-child(2){width:17%}
+.month-table th:nth-child(3){width:20%}
+.month-table th:nth-child(4){width:20%}
+.month-table th:nth-child(5){width:19%}
+.month-table th:last-child{width:6%}
+.month-table td{padding-left:13px;padding-right:13px;font-size:14px}
+.currency-pair{display:grid;gap:1px}
+.currency-pair-secondary{color:var(--muted);font-size:12px}
+.saving-empty{color:var(--muted)}
+.savings-entry{margin-top:18px}
+.savings-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.saving-help{padding-top:2px}
+@media(max-width:950px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.month-table th,.month-table td{padding-left:10px;padding-right:10px}.month-table th:first-child{width:17%}.month-table th:nth-child(3){width:21%}.month-table th:nth-child(4){width:21%}.month-table th:nth-child(5){width:18%}}
+@media(max-width:680px){.savings-grid{grid-template-columns:1fr 1fr}.savings-grid label:last-child{grid-column:1/-1}.card-details{flex-wrap:wrap}}
+@media(max-width:400px){.savings-grid{grid-template-columns:1fr}.savings-grid label:last-child{grid-column:auto}}

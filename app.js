@@ -19,7 +19,7 @@
   let toastTimeout;
 
   function readState() {
-    const blank = {schemaVersion: 2, theme: 'dark', eurRate: null, sources: [], years: {}};
+    const blank = {schemaVersion: 3, theme: 'dark', eurRate: null, sources: [], years: {}};
     for (const key of [KEY, LEGACY_KEY]) {
       try {
         const saved = JSON.parse(localStorage.getItem(key));
@@ -29,23 +29,31 @@
     return blank;
   }
   function validBackup(data) {
-    if (!data || ![1, 2].includes(data.schemaVersion) || !['dark', 'light'].includes(data.theme) || !Array.isArray(data.sources) || !data.years || typeof data.years !== 'object' || Array.isArray(data.years)) return false;
+    if (!data || ![1, 2, 3].includes(data.schemaVersion) || !['dark', 'light'].includes(data.theme) || !Array.isArray(data.sources) || !data.years || typeof data.years !== 'object' || Array.isArray(data.years)) return false;
     if (data.sources.length > 250 || Object.keys(data.years).length > 30) return false;
-    if (data.schemaVersion === 2 && data.eurRate != null && (!Number.isFinite(data.eurRate) || data.eurRate <= 0 || data.eurRate > 10000)) return false;
+    if (data.schemaVersion >= 2 && data.eurRate != null && (!Number.isFinite(data.eurRate) || data.eurRate <= 0 || data.eurRate > 10000)) return false;
     if (!data.sources.every(s => s && typeof s.id === 'string' && s.id.length < 100 && typeof s.name === 'string' && s.name.length <= 64 && ['salary','freelance'].includes(s.type) && ['MUR','EUR'].includes(s.currency) && typeof s.active === 'boolean' && (data.schemaVersion === 1 ? (s.currency === 'MUR' || Number(s.defaultRate) > 0) : ((s.basicSalary == null || (Number.isFinite(s.basicSalary) && s.basicSalary >= 0 && s.basicSalary < 1e12)) && (s.rateOverride == null || (Number.isFinite(s.rateOverride) && s.rateOverride > 0 && s.rateOverride <= 10000)))))) return false;
-    return Object.values(data.years).every(y => y && typeof y === 'object' && y.entries && typeof y.entries === 'object' && !Array.isArray(y.entries) && Object.entries(y.entries).every(([key, entry]) => /^\d{1,2}:[\w-]{1,100}$/.test(key) && entry && typeof entry === 'object' && ['actual','forecast'].includes(entry.kind) && ['amount','rate','paye'].every(field => entry[field] == null || (Number.isFinite(entry[field]) && entry[field] >= 0 && entry[field] < 1e12))));
+    return Object.values(data.years).every(y => y && typeof y === 'object' && y.entries && typeof y.entries === 'object' && !Array.isArray(y.entries) &&
+      Object.entries(y.entries).every(([key, entry]) => /^\d{1,2}:[\w-]{1,100}$/.test(key) && entry && typeof entry === 'object' && ['actual','forecast'].includes(entry.kind) && ['amount','rate','paye'].every(field => entry[field] == null || (Number.isFinite(entry[field]) && entry[field] >= 0 && entry[field] < 1e12))) &&
+      (y.savings == null || (typeof y.savings === 'object' && !Array.isArray(y.savings) && Object.entries(y.savings).every(([month, saving]) => /^(?:[0-9]|1[01])$/.test(month) && saving && Number.isFinite(saving.amount) && saving.amount >= 0 && saving.amount < 1e12 && ['MUR','EUR'].includes(saving.currency) && (saving.rate == null || (Number.isFinite(saving.rate) && saving.rate > 0 && saving.rate <= 10000))))));
   }
   function normalizeState(data) {
-    if (data.schemaVersion === 2) return {...data, eurRate: data.eurRate ?? null};
-    return {
-      schemaVersion: 2, theme: data.theme, eurRate: null, years: data.years,
-      sources: data.sources.map(({defaultRate, ...source}) => ({...source, basicSalary: null, rateOverride: defaultRate ?? null}))
-    };
+    const sources = data.schemaVersion === 1
+      ? data.sources.map(({defaultRate, ...source}) => ({...source, basicSalary: null, rateOverride: defaultRate ?? null}))
+      : data.sources;
+    const years = Object.fromEntries(Object.entries(data.years).map(([key, year]) => [key, {...year, savings: year.savings || {}}]));
+    return {...data, schemaVersion: 3, eurRate: data.schemaVersion === 1 ? null : data.eurRate ?? null, sources, years};
+  }
+  function yearData() {
+    state.years[yearKey] ||= {entries: {}, savings: {}};
+    state.years[yearKey].entries ||= {};
+    state.years[yearKey].savings ||= {};
+    return state.years[yearKey];
   }
   function entries() {
-    state.years[yearKey] ||= {entries: {}};
-    return state.years[yearKey].entries;
+    return yearData().entries;
   }
+  function savings() { return yearData().savings; }
   function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
   function entryKey(month, sourceId) { return `${month}:${sourceId}`; }
   function recorded(month, sourceId) { return entries()[entryKey(month, sourceId)] || null; }
@@ -91,22 +99,39 @@
     const mur = missingRate ? 0 : Math.round((amount || 0) * (rate || 1) * 100) / 100;
     return {amount, rate, paye, mur, isActual, future, missingRate, record};
   }
+  function savingProjection(month) {
+    const record = savings()[month] || null;
+    if (!record) return {record:null, amount:null, currency:'MUR', rate:state.eurRate ?? null, mur:null, eur:null, missingRate:false};
+    const amount = record.amount;
+    const currency = record.currency;
+    const rate = record.rate ?? state.eurRate ?? null;
+    const missingRate = amount > 0 && !(rate > 0);
+    if (missingRate) return {record, amount, currency, rate, mur:null, eur:null, missingRate:true};
+    const mur = amount === 0 ? 0 : currency === 'EUR' ? amount * rate : amount;
+    const eur = amount === 0 ? 0 : currency === 'EUR' ? amount : amount / rate;
+    return {record, amount, currency, rate, mur:Math.round(mur * 100) / 100, eur:Math.round(eur * 100) / 100, missingRate:false};
+  }
   function totals() {
     const monthData = MONTHS.map((_, month) => {
       const projected = state.sources.map(source => ({source, ...projection(month, source)}));
+      const saving = savingProjection(month);
       const income = Math.round(projected.reduce((sum, item) => sum + item.mur, 0) * 100) / 100;
       const actualPaye = projected.reduce((sum, item) => sum + (item.isActual ? item.record?.paye || 0 : 0), 0);
       const futurePaye = projected.reduce((sum, item) => sum + (item.future || item.record?.kind === 'forecast' ? item.paye || 0 : 0), 0);
       const actualIncome = projected.reduce((sum, item) => sum + (item.isActual ? item.mur : 0), 0);
-      return {projected, income, actualPaye, futurePaye, actualIncome, missingRate: projected.some(item => item.missingRate)};
+      return {projected, saving, income, actualPaye, futurePaye, actualIncome, missingRate: projected.some(item => item.missingRate)};
     });
     const income = Math.round(monthData.reduce((sum, item) => sum + item.income, 0) * 100) / 100;
     const actualIncome = Math.round(monthData.reduce((sum, item) => sum + item.actualIncome, 0) * 100) / 100;
     const paid = monthData.reduce((sum, item) => sum + item.actualPaye, 0);
     const futurePaye = monthData.reduce((sum, item) => sum + item.futurePaye, 0);
+    const savedMonths = monthData.filter((item, month) => month <= currentMonth && item.saving.record);
+    const savedMissingRate = savedMonths.some(item => item.saving.missingRate);
+    const savedMur = Math.round(savedMonths.reduce((sum, item) => sum + (item.saving.mur || 0), 0) * 100) / 100;
+    const savedEur = Math.round(savedMonths.reduce((sum, item) => sum + (item.saving.eur || 0), 0) * 100) / 100;
     const tax = supported ? window.TaxRules.annualTax(income) : null;
     const monthlyTax = supported ? window.TaxRules.distributeMonthly(tax, monthData.map(m => m.income)) : MONTHS.map(() => null);
-    return {monthData, income, actualIncome, paid, futurePaye, tax, monthlyTax, missingRate: monthData.some(m => m.missingRate)};
+    return {monthData, income, actualIncome, paid, futurePaye, tax, monthlyTax, savedMur, savedEur, savedMissingRate, missingRate: monthData.some(m => m.missingRate)};
   }
   function setText(id, value) { $(id).textContent = value; }
   function create(tag, className, text) {
@@ -114,6 +139,16 @@
     if (className) node.className = className;
     if (text != null) node.textContent = text;
     return node;
+  }
+  function savingsDisplay(saving) {
+    const pair = create('div', 'currency-pair');
+    if (!saving.record) { pair.append(create('span', 'saving-empty', '—')); return pair; }
+    if (saving.missingRate) {
+      pair.append(create('span', '', fmtCurrency(saving.amount, saving.currency)), create('span', 'currency-pair-secondary', 'Rate needed'));
+      return pair;
+    }
+    pair.append(create('span', '', fmtCurrency(saving.mur, 'MUR')), create('span', 'currency-pair-secondary', fmtCurrency(saving.eur, 'EUR')));
+    return pair;
   }
   function monthStatus(month, monthData) {
     if (month > currentMonth) return 'Forecast';
@@ -131,6 +166,8 @@
     setText('income-detail', `${fmt(t.actualIncome)} recorded · ${fmt(t.income - t.actualIncome)} forecast`);
     setText('paye-paid', fmt(t.paid));
     setText('tax-total', t.tax === null || t.missingRate ? '—' : fmt(t.tax));
+    setText('saved-total', t.savedMissingRate ? '—' : fmtCurrency(t.savedMur, 'MUR'));
+    setText('saved-detail', t.savedMissingRate ? 'Add a EUR to MUR rate' : `${fmtCurrency(t.savedEur, 'EUR')} equivalent · Through ${MONTHS[currentMonth]}`);
     setText('projection-badge', t.missingRate ? 'EUR rate needed' : supported ? 'Forecast' : 'Rules needed');
     if (t.tax === null || t.missingRate) {
       setText('tax-balance', '—');
@@ -155,7 +192,8 @@
       tr.addEventListener('click', () => openMonth(month));
       tr.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openMonth(month); } });
       const first = create('td'); first.append(create('div', 'month-name', MONTHS[month]), create('div', 'month-sub', status));
-      tr.append(first, create('td', month > currentMonth ? 'forecast-value' : '', fmt(monthData.income)), create('td', monthData.futurePaye && !monthData.actualPaye ? 'forecast-value' : '', fmt(payeAmount)), create('td', 'forecast-value', forecastTax), create('td', 'edit-chevron', '›'));
+      const savingCell = create('td'); savingCell.append(savingsDisplay(monthData.saving));
+      tr.append(first, create('td', month > currentMonth ? 'forecast-value' : '', fmt(monthData.income)), create('td', monthData.futurePaye && !monthData.actualPaye ? 'forecast-value' : '', fmt(payeAmount)), create('td', 'forecast-value', forecastTax), savingCell, create('td', 'edit-chevron', '›'));
       body.append(tr);
       const card = create('button', 'month-card'); card.type = 'button'; card.addEventListener('click', () => openMonth(month));
       const left = create('div'); left.append(create('div', 'card-name', MONTHS[month]), create('div', 'card-status', status));
@@ -163,7 +201,9 @@
       const details = create('div', 'card-details');
       const paidPart = create('span'); paidPart.append(create('span', '', 'PAYE '), create('strong', '', fmt(payeAmount)));
       const taxPart = create('span'); taxPart.append(create('span', '', 'Tax forecast '), create('strong', '', forecastTax));
-      details.append(paidPart, taxPart); card.append(left, right, details); cards.append(card);
+      const savedText = !monthData.saving.record ? '—' : monthData.saving.missingRate ? 'Rate needed' : `${fmtCurrency(monthData.saving.mur, 'MUR')} · ${fmtCurrency(monthData.saving.eur, 'EUR')}`;
+      const savedPart = create('span'); savedPart.append(create('span', '', 'Set aside '), create('strong', '', savedText));
+      details.append(paidPart, taxPart, savedPart); card.append(left, right, details); cards.append(card);
     });
     renderSources();
   }
@@ -257,6 +297,37 @@
     if (field === 'rate') label.append(create('span', 'field-help', 'Clear to use the source or general rate.'));
     return label;
   }
+  function savingsField(labelText, field, value, step = '0.01') {
+    const label = create('label', '', labelText);
+    const input = create('input'); input.type = 'number'; input.min = '0'; input.step = step; input.inputMode = 'decimal';
+    input.placeholder = field === 'rate' ? 'Use general rate' : 'Not entered';
+    if (value != null) input.value = String(value);
+    input.dataset.savingsField = field;
+    input.addEventListener('input', () => { input.dataset.edited = 'true'; updateSavingsSummary(); });
+    label.append(input);
+    if (field === 'rate') label.append(create('span', 'field-help', 'Clear to use the general rate.'));
+    return label;
+  }
+  function appendSavingsEditor(editor, month) {
+    const saving = savingProjection(month);
+    const section = create('section', 'entry savings-entry');
+    const header = create('div', 'entry-header');
+    header.append(create('div', 'entry-title', 'Amount set aside'), create('div', 'entry-type', 'TAX SAVINGS'));
+    const grid = create('div', 'entry-grid savings-grid');
+    grid.append(savingsField('Amount saved', 'amount', saving.amount));
+    const currencyLabel = create('label', '', 'Currency');
+    const currency = create('select'); currency.dataset.savingsField = 'currency';
+    for (const value of ['MUR','EUR']) { const option = create('option', '', value); option.value = value; currency.append(option); }
+    currency.value = saving.currency;
+    currency.addEventListener('change', () => { currency.dataset.edited = 'true'; updateSavingsSummary(); });
+    currencyLabel.append(currency); grid.append(currencyLabel);
+    grid.append(savingsField('EUR to MUR · rate', 'rate', saving.rate, '0.0001'));
+    const equivalent = create('div', 'entry-note saving-equivalent');
+    const help = create('div', 'entry-note saving-help', month > currentMonth
+      ? 'Future savings appear in this month but join Saved so far only when the month arrives.'
+      : 'Tracks money reserved for tax. It does not count as tax paid to MRA.');
+    section.append(header, grid, equivalent, help); editor.append(section); updateSavingsSummary();
+  }
   function openMonth(month) {
     editingMonth = month;
     const future = month > currentMonth;
@@ -277,6 +348,7 @@
       editor.append(entry);
     }
     if (!state.sources.length) editor.append(create('div', 'entry-empty', 'Add an income source in Settings to enter this month.'));
+    appendSavingsEditor(editor, month);
     if (!future && state.sources.length) {
       const label = create('label', 'confirmation');
       const checkbox = create('input'); checkbox.type = 'checkbox'; checkbox.id = 'actual-check'; checkbox.style.width = 'auto'; checkbox.style.marginRight = '9px';
@@ -301,6 +373,21 @@
       sum += mur;
     }
     $('month-editor').querySelector('.month-summary strong').textContent = fmt(sum);
+    updateSavingsSummary();
+  }
+  function updateSavingsSummary() {
+    const section = $('month-editor')?.querySelector?.('.savings-entry');
+    if (!section) return;
+    const amount = cleanNumber(section.querySelector('[data-savings-field="amount"]').value);
+    const currency = section.querySelector('[data-savings-field="currency"]').value;
+    const rate = cleanNumber(section.querySelector('[data-savings-field="rate"]').value) ?? state.eurRate;
+    const output = section.querySelector('.saving-equivalent');
+    if (amount == null) { output.textContent = 'No savings entered for this month.'; return; }
+    if (!Number.isFinite(amount) || amount < 0) { output.textContent = 'Enter a valid amount.'; return; }
+    if (amount > 0 && !(rate > 0)) { output.textContent = 'Enter a EUR to MUR rate to show both currencies.'; return; }
+    const mur = amount === 0 ? 0 : currency === 'EUR' ? amount * rate : amount;
+    const eur = amount === 0 ? 0 : currency === 'EUR' ? amount : amount / rate;
+    output.textContent = `${fmtCurrency(mur, 'MUR')} · ${fmtCurrency(eur, 'EUR')}`;
   }
   function saveMonth() {
     if (editingMonth === null) return;
@@ -328,7 +415,26 @@
       }
       changes.push([entryKey(editingMonth, source.id), next]);
     }
+    const savingSection = $('month-editor').querySelector('.savings-entry');
+    const savingFields = [...savingSection.querySelectorAll('[data-savings-field]')];
+    const savingEdited = savingFields.some(field => field.dataset.edited === 'true');
+    let savingChange = null;
+    if (savingEdited) {
+      const amountInput = savingSection.querySelector('[data-savings-field="amount"]');
+      const currency = savingSection.querySelector('[data-savings-field="currency"]').value;
+      const rateInput = savingSection.querySelector('[data-savings-field="rate"]');
+      const amount = cleanNumber(amountInput.value);
+      const rate = cleanNumber(rateInput.value) ?? state.eurRate;
+      if (amount == null) savingChange = {remove:true};
+      else {
+        if (!Number.isFinite(amount) || amount < 0 || amount >= 1e12) {showToast('Enter a valid savings amount'); amountInput.focus(); return;}
+        if (amount > 0 && (!Number.isFinite(rate) || rate <= 0 || rate > 10000)) {showToast('Enter a valid EUR to MUR rate for savings'); rateInput.focus(); return;}
+        savingChange = {value:{amount, currency, ...(rate != null && rate !== state.eurRate ? {rate} : {})}};
+      }
+    }
     for (const [key, value] of changes) entries()[key] = value;
+    if (savingChange?.remove) delete savings()[editingMonth];
+    else if (savingChange?.value) savings()[editingMonth] = savingChange.value;
     try {save();} catch {showToast('Storage is full; export a backup'); return;}
     $('month-dialog').close(); editingMonth = null; render(); window.BuddyReminders?.sync(); showToast('Month saved');
   }
@@ -357,12 +463,12 @@
     try {
       Promise.resolve(document.modelContext.registerTool({
         name: 'read_buddy_summary', title: 'Read Buddy summary',
-        description: 'Read the current financial year income, PAYE and tax forecast from this device.',
+        description: 'Read the current financial year income, PAYE, savings and tax forecast from this device.',
         inputSchema: {type: 'object', properties: {}, additionalProperties: false},
         annotations: {readOnlyHint: true, untrustedContentHint: false},
         execute() {
           const t = totals();
-          return {year: yearKey, sources: state.sources.map(({id,name,type,currency}) => ({id,name,type,currency})), income_mur: t.income, paye_paid_mur: t.paid, projected_future_paye_mur: t.futurePaye, annual_tax_mur: t.missingRate ? null : t.tax, projected_balance_mur: t.missingRate || t.tax === null ? null : Math.round(t.tax - t.paid - t.futurePaye)};
+          return {year: yearKey, sources: state.sources.map(({id,name,type,currency}) => ({id,name,type,currency})), income_mur: t.income, paye_paid_mur: t.paid, projected_future_paye_mur: t.futurePaye, saved_so_far_mur:t.savedMissingRate ? null : t.savedMur, saved_so_far_eur:t.savedMissingRate ? null : t.savedEur, annual_tax_mur: t.missingRate ? null : t.tax, projected_balance_mur: t.missingRate || t.tax === null ? null : Math.round(t.tax - t.paid - t.futurePaye)};
         }
       })).catch(() => {});
       Promise.resolve(document.modelContext.registerTool({

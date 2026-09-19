@@ -33,12 +33,13 @@
           <div class="metric"><div class="metric-label">PAYE already paid</div><div id="paye-paid" class="metric-value">Rs 0</div><div class="metric-note">Confirmed months only</div></div>
           <div class="metric"><div class="metric-label">Projected total tax</div><div id="tax-total" class="metric-value">Rs 0</div><div class="metric-note">Based on annual income</div></div>
           <div class="metric"><div id="balance-label" class="metric-label">Projected year-end balance</div><div id="tax-balance" class="metric-value">Rs 0</div><div id="balance-detail" class="metric-note"></div></div>
+          <div class="metric"><div class="metric-label">Saved so far</div><div id="saved-total" class="metric-value">Rs 0</div><div id="saved-detail" class="metric-note">€0 equivalent</div></div>
         </div>
       </section>
 
       <section class="months" aria-label="Financial year by month">
-        <div class="section-heading"><div><h2>Monthly view</h2><p>July to June · amounts in MUR</p></div><button id="add-source-main" class="button solid" type="button">Add income source</button></div>
-        <div class="table-scroll"><table class="month-table"><thead><tr><th scope="col">Month</th><th scope="col">Income</th><th scope="col">PAYE paid / forecast</th><th scope="col">Monthly tax forecast</th><th scope="col"><span class="sr-only">Edit</span></th></tr></thead><tbody id="month-rows"></tbody></table></div>
+        <div class="section-heading"><div><h2>Monthly view</h2><p>July to June · tax figures in MUR · savings in MUR and EUR</p></div><button id="add-source-main" class="button solid" type="button">Add income source</button></div>
+        <div class="table-scroll"><table class="month-table"><thead><tr><th scope="col">Month</th><th scope="col">Income</th><th scope="col">PAYE paid / forecast</th><th scope="col">Monthly tax forecast</th><th scope="col">Amount set aside</th><th scope="col"><span class="sr-only">Edit</span></th></tr></thead><tbody id="month-rows"></tbody></table></div>
         <div id="month-cards" class="month-cards"></div>
       </section>
 
